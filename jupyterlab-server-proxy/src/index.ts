@@ -2,8 +2,27 @@ import { JupyterFrontEnd, JupyterFrontEndPlugin } from '@jupyterlab/application'
 import { ILauncher } from '@jupyterlab/launcher';
 import { PageConfig } from '@jupyterlab/coreutils';
 
+import { CommandRegistry } from '@lumino/commands';
+import { Widget } from '@lumino/widgets';
+
 import '../style/index.css';
 
+class IFrameWidget extends Widget {
+  constructor(title: string, path: string) {
+    super();
+    this.id = path;
+
+    this.title.label = title;
+    this.title.closable = true;
+
+    const div = document.createElement("div");
+    div.classList.add("iframe-widget");
+    const iframe = document.createElement("iframe");
+    iframe.src = path;
+    div.appendChild(iframe);
+    this.node.appendChild(div);
+  }
+}
 
 function addLauncherEntries(serverData: any, launcher: ILauncher, app: JupyterFrontEnd) {
     for (let server_process of serverData.server_processes) {
@@ -14,13 +33,30 @@ function addLauncherEntries(serverData: any, launcher: ILauncher, app: JupyterFr
 
       let commandId = 'server-proxy:' + server_process.name;
 
-      app.commands.addCommand(commandId, {
-        label: server_process.launcher_entry.title,
-        execute: () => {
-          let launch_url = PageConfig.getBaseUrl() + server_process.name + '/';
-          window.open(launch_url, '_blank');
+      let launch_url = PageConfig.getBaseUrl() + server_process.name + '/';
+      let options : CommandRegistry.ICommandOptions;
+      if (server_process.framed) {
+        let widget = new IFrameWidget(server_process.launcher_entry.title, launch_url);
+        options = {
+          label: server_process.launcher_entry.title,
+          execute: () => {
+            if (!widget.isAttached) {
+              app.shell.add(widget);
+            }
+            app.shell.activateById(widget.id);
+          }
         }
-      });
+      } else {
+        options = {
+          label: server_process.launcher_entry.title,
+          execute: () => {
+            let launch_url = PageConfig.getBaseUrl() + server_process.name + '/';
+            window.open(launch_url, '_blank');
+          }
+        }
+      }
+
+      app.commands.addCommand(commandId, options);
       let command : ILauncher.IItemOptions = {
         command: commandId,
         category: 'Notebook'
